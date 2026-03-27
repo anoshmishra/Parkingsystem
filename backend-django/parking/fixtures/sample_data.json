@@ -1,0 +1,32 @@
+[
+  { "model": "parking.parkinglot", "pk": 1, "fields": { "name": "Downtown Lot" } },
+  { "model": "parking.parkinglot", "pk": 2, "fields": { "name": "Mall Parking" } },
+  { "model": "parking.parkinglot", "pk": 3, "fields": { "name": "Airport Lot" } },
+
+  { "model": "parking.slot", "pk": 1, "fields": { "lot": 1, "number": 1, "is_occupied": true } },
+  { "model": "parking.slot", "pk": 2, "fields": { "lot": 1, "number": 2, "is_occupied": false } },
+  { "model": "parking.slot", "pk": 3, "fields": { "lot": 1, "number": 3, "is_occupied": true } },
+  { "model": "parking.slot", "pk": 4, "fields": { "lot": 1, "number": 4, "is_occupied": false } },
+  { "model": "parking.slot", "pk": 5, "fields": { "lot": 1, "number": 5, "is_occupied": false } },
+
+  { "model": "parking.slot", "pk": 6, "fields": { "lot": 2, "number": 1, "is_occupied": false } },
+  { "model": "parking.slot", "pk": 7, "fields": { "lot": 2, "number": 2, "is_occupied": true } },
+  { "model": "parking.slot", "pk": 8, "fields": { "lot": 2, "number": 3, "is_occupied": false } },
+  { "model": "parking.slot", "pk": 9, "fields": { "lot": 2, "number": 4, "is_occupied": false } },
+  { "model": "parking.slot", "pk": 10, "fields": { "lot": 2, "number": 5, "is_occupied": false } },
+
+  { "model": "parking.slot", "pk": 11, "fields": { "lot": 3, "number": 1, "is_occupied": false } },
+  { "model": "parking.slot", "pk": 12, "fields": { "lot": 3, "number": 2, "is_occupied": false } },
+  { "model": "parking.slot", "pk": 13, "fields": { "lot": 3, "number": 3, "is_occupied": false } },
+  { "model": "parking.slot", "pk": 14, "fields": { "lot": 3, "number": 4, "is_occupied": false } },
+  { "model": "parking.slot", "pk": 15, "fields": { "lot": 3, "number": 5, "is_occupied": false } },
+
+  { "model": "parking.vehicle", "pk": 1, "fields": { "number_plate": "KA01AB1234" } },
+  { "model": "parking.vehicle", "pk": 2, "fields": { "number_plate": "MH12XY9001" } },
+  { "model": "parking.vehicle", "pk": 3, "fields": { "number_plate": "DL08CD7788" } },
+  { "model": "parking.vehicle", "pk": 4, "fields": { "number_plate": "TN10EF5544" } },
+
+  { "model": "parking.booking", "pk": 1, "fields": { "vehicle": 1, "slot": 1, "start_time": "2026-03-26T08:00:00Z", "end_time": null } },
+  { "model": "parking.booking", "pk": 2, "fields": { "vehicle": 2, "slot": 3, "start_time": "2026-03-26T08:30:00Z", "end_time": null } },
+  { "model": "parking.booking", "pk": 3, "fields": { "vehicle": 3, "slot": 7, "start_time": "2026-03-26T07:00:00Z", "end_time": "2026-03-26T09:00:00Z" } }
+]
