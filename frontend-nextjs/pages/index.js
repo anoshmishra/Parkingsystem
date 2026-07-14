@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import SlotGrid from "../components/SlotGrid";
-import { fetchAvailableSlots, fetchLots } from "../lib/api";
+import { API_BASE, fetchAvailableSlots, fetchLots } from "../lib/api";
 
 const FILTERS = [
   { key: 'available', label: 'Available' },
@@ -17,15 +17,33 @@ export default function HomePage() {
   const [statusMessage, setStatusMessage] = useState("");
   const [statusTone, setStatusTone] = useState("info");
   const [loading, setLoading] = useState(false);
+  const [lotsLoaded, setLotsLoaded] = useState(false);
   const [filter, setFilter] = useState('available');
 
   useEffect(() => {
+    let isCurrent = true;
+
     fetchLots()
-      .then(setLots)
+      .then((rows) => {
+        if (!isCurrent) return;
+
+        setLots(rows);
+        setLotsLoaded(true);
+        if (rows.length === 0) {
+          setError("No parking lots found in the backend database. Run the seed command on the deployed Django service.");
+        }
+      })
       .catch((err) => {
+        if (!isCurrent) return;
+
         console.error("Error fetching lots:", err);
-        setError("Could not connect to Django backend. Ensure it is running on port 8000.");
+        setLotsLoaded(true);
+        setError(`Could not connect to Django backend at ${API_BASE}.`);
       });
+
+    return () => {
+      isCurrent = false;
+    };
   }, []);
 
   function handleLotChange(event) {
@@ -35,6 +53,10 @@ export default function HomePage() {
   }
 
   async function loadSlots(forFilter = filter) {
+    if (lotsLoaded && lots.length === 0) {
+      setError("No parking lots found in the backend database. Run the seed command on the deployed Django service.");
+      return;
+    }
     if (!selectedLot) {
       setError("Please select a lot first");
       return;
@@ -60,8 +82,8 @@ export default function HomePage() {
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
         <div>
           <label htmlFor="lot" style={{ fontWeight: '600', marginRight: 8 }}>Parking Lot</label>
-          <select id="lot" value={selectedLot} onChange={handleLotChange}>
-            <option value="">Select lot</option>
+          <select id="lot" value={selectedLot} onChange={handleLotChange} disabled={!lotsLoaded || lots.length === 0}>
+            <option value="">{lotsLoaded && lots.length === 0 ? "No lots available" : "Select lot"}</option>
             {lots.map((lot) => (
               <option key={lot.id} value={lot.id}>{lot.name}</option>
             ))}
@@ -84,7 +106,7 @@ export default function HomePage() {
         </div>
 
         <div>
-          <button onClick={() => loadSlots()} className="filter-btn">Load Slots</button>
+          <button onClick={() => loadSlots()} className="filter-btn" disabled={!lotsLoaded || lots.length === 0}>Load Slots</button>
         </div>
       </div>
 
@@ -96,6 +118,7 @@ export default function HomePage() {
           <button
             key={f.key}
             className={`filter-btn ${filter === f.key ? 'active' : ''}`}
+            disabled={!lotsLoaded || lots.length === 0}
             onClick={() => { setFilter(f.key); loadSlots(f.key); }}
           >
             {f.label}

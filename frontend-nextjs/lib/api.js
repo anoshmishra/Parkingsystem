@@ -1,7 +1,9 @@
-const API_BASE =
+const rawApiBase =
   process.env.NEXT_PUBLIC_API_URL ||
   process.env.NEXT_PUBLIC_DJANGO_API_BASE ||
   "https://parking-backend-22m3.onrender.com";
+
+export const API_BASE = rawApiBase.replace(/\/+$/, "");
 
 async function readJsonResponse(res, fallbackMessage) {
   let json = null;
@@ -12,7 +14,7 @@ async function readJsonResponse(res, fallbackMessage) {
   }
 
   if (!res.ok) {
-    throw new Error(json?.message || fallbackMessage);
+    throw new Error(json?.message || json?.detail || fallbackMessage);
   }
 
   return json;

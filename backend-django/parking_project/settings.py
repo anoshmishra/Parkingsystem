@@ -5,12 +5,18 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def csv_env(name, default=""):
+    return [
+        value.strip()
+        for value in os.getenv(name, default).split(",")
+        if value.strip()
+    ]
+
+
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
 DEBUG = os.getenv("DEBUG", "False") == "True"
-ALLOWED_HOSTS = os.getenv(
-    "ALLOWED_HOSTS",
-    "localhost,127.0.0.1"
-).split(",")
+ALLOWED_HOSTS = csv_env("ALLOWED_HOSTS", "localhost,127.0.0.1")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -82,6 +88,14 @@ STATICFILES_STORAGE = (
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-CORS_ALLOWED_ORIGINS = [
-    "https://parkingsystem-anosh-9zwternpw-anoshmishras-projects.vercel.app",
-]
+CORS_ALLOWED_ORIGINS = csv_env(
+    "CORS_ALLOWED_ORIGINS",
+    ",".join(
+        [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://parkingsystem-anosh-9zwternpw-anoshmishras-projects.vercel.app",
+        ]
+    ),
+)
+CORS_ALLOWED_ORIGIN_REGEXES = csv_env("CORS_ALLOWED_ORIGIN_REGEXES")

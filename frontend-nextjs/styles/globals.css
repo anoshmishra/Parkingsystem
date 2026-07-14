@@ -47,6 +47,7 @@ button{font-family:inherit}
 .filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .filter-btn{padding:6px 10px;border-radius:6px;border:1px solid #ddd;background:transparent;cursor:pointer}
 .filter-btn.active{background:#000;color:#fff}
+.filter-btn:disabled{opacity:0.5;cursor:not-allowed}
 
 .card{border:1px solid #eaeaea;padding:14px;border-radius:10px}
 
