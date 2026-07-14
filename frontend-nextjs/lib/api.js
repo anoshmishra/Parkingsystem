@@ -1,36 +1,51 @@
-const API_DJANGO_BASE = "http://localhost:8001/api";
-const API_GO_BASE = "http://localhost:8080";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_DJANGO_API_BASE ||
+  "https://parking-backend-22m3.onrender.com";
 
-export async function fetchLots() {
-  const res = await fetch(`${API_DJANGO_BASE}/lots/`);
-  if (!res.ok) throw new Error("Failed to fetch lots");
-  return res.json();
+async function readJsonResponse(res, fallbackMessage) {
+  let json = null;
+  try {
+    json = await res.json();
+  } catch {
+    // Some failures return an empty body or plain text.
+  }
+
+  if (!res.ok) {
+    throw new Error(json?.message || fallbackMessage);
+  }
+
+  return json;
 }
 
-export async function fetchAvailableSlots(lotId) {
-  const res = await fetch(`${API_DJANGO_BASE}/lots/${lotId}/slots/available/`);
-  if (!res.ok) throw new Error("Failed to fetch slots");
-  return res.json();
+export async function fetchLots() {
+  const res = await fetch(`${API_BASE}/api/lots/`);
+  return readJsonResponse(res, "Failed to fetch lots");
+}
+
+export async function fetchAvailableSlots(lotId, filter = 'available') {
+  const url = new URL(`${API_BASE}/api/lots/${lotId}/slots/available/`);
+  if (filter) url.searchParams.set('filter', filter);
+
+  const res = await fetch(url.toString());
+  return readJsonResponse(res, "Failed to fetch slots");
 }
 
 export async function createBooking(payload) {
-  const res = await fetch(`${API_DJANGO_BASE}/bookings/`, {
+  const res = await fetch(`${API_BASE}/api/bookings/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-  if (!res.ok) throw new Error("Failed to create booking");
-  return res.json();
+  return readJsonResponse(res, "Failed to create booking");
 }
 
 export async function fetchBookings() {
-  const res = await fetch(`${API_DJANGO_BASE}/bookings/`);
-  if (!res.ok) throw new Error("Failed to fetch bookings");
-  return res.json();
+  const res = await fetch(`${API_BASE}/api/bookings/`);
+  return readJsonResponse(res, "Failed to fetch bookings");
 }
 
 export async function fetchActiveBookingsReport() {
-  const res = await fetch(`${API_GO_BASE}/active-bookings`);
-  if (!res.ok) throw new Error("Failed to fetch active bookings report");
-  return res.json();
+  const res = await fetch(`${API_BASE}/api/bookings/`);
+  return readJsonResponse(res, "Failed to fetch active bookings report");
 }

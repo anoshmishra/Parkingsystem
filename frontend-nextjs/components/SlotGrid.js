@@ -1,63 +1,43 @@
 import { createBooking } from "../lib/api";
 
-export default function SlotGrid({ slots, selectedVehicle, fetchSlots }) {
+export default function SlotGrid({ slots, vehicleNumber, fetchSlots, onStatus }) {
   async function handleBook(slotId) {
-    if (!selectedVehicle) {
-      alert("Please enter a Vehicle ID in the input box first!");
+    const plate = vehicleNumber.trim();
+    if (!plate) {
+      onStatus?.({ type: 'error', message: 'Please enter a vehicle number first.' });
       return;
     }
 
     try {
-      // We send the ID and a current timestamp to satisfy Django's model requirements
-      await createBooking({
-        vehicle: Number(selectedVehicle),
+      const response = await createBooking({
+        vehicle_number: plate,
         slot: slotId,
         start_time: new Date().toISOString()
       });
 
-      alert("Booking created successfully!");
-      
-      // Refresh the parent state so the slot correctly shows as "Occupied"
-      if (fetchSlots) {
-        await fetchSlots();
-      }
+      const slotLabel = slots.find((entry) => entry.id === slotId)?.number;
+      onStatus?.({ type: 'success', message: `Booked ${plate} into Slot ${slotLabel || slotId}.` });
+      if (fetchSlots) await fetchSlots();
     } catch (err) {
-      // If Django returns a 400, this alert will now show the SPECIFIC field error
       console.error("Booking Error:", err);
-      alert("Failed to create booking: " + err.message);
+      onStatus?.({ type: 'error', message: err.message || "Failed to create booking" });
     }
   }
 
-  if (!slots.length) {
-    return <p style={{ color: "#666", fontStyle: "italic" }}>No slots available for this lot.</p>;
-  }
+  if (!slots || !slots.length) return <p className="small-muted">No slots available for this lot.</p>;
 
   return (
-    <div style={{ 
-      display: "grid", 
-      gap: "12px", 
-      gridTemplateColumns: "repeat(3, 1fr)",
-      marginTop: "20px" 
-    }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 16 }}>
       {slots.map((slot) => (
         <button
           key={slot.id}
           onClick={() => !slot.is_occupied && handleBook(slot.id)}
           disabled={slot.is_occupied}
-          style={{
-            padding: "15px",
-            borderRadius: "8px",
-            border: "1px solid #ddd",
-            cursor: slot.is_occupied ? "not-allowed" : "pointer",
-            backgroundColor: slot.is_occupied ? "#f8d7da" : "#d4edda",
-            color: slot.is_occupied ? "#721c24" : "#155724",
-            transition: "transform 0.1s ease",
-            fontWeight: "bold"
-          }}
+          className="slot-btn"
         >
-          <div>Slot {slot.number}</div>
-          <div style={{ fontSize: "0.8rem", fontWeight: "normal" }}>
-            {slot.is_occupied ? "Occupied" : "Click to Book"}
+          <div style={{ fontWeight: 700 }}>Slot {slot.number}</div>
+          <div style={{ marginTop: 6, fontSize: '0.9rem' }}>
+            {slot.is_occupied ? <span style={{ color: '#b00' }}>Occupied</span> : <span style={{ color: '#000' }}>Available</span>}
           </div>
         </button>
       ))}

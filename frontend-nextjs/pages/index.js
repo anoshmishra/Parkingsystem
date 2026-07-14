@@ -2,94 +2,131 @@ import { useEffect, useState } from "react";
 import SlotGrid from "../components/SlotGrid";
 import { fetchAvailableSlots, fetchLots } from "../lib/api";
 
+const FILTERS = [
+  { key: 'available', label: 'Available' },
+  { key: 'occupied', label: 'Occupied' },
+  { key: 'all', label: 'All' }
+]
+
 export default function HomePage() {
   const [lots, setLots] = useState([]);
   const [slots, setSlots] = useState([]);
   const [selectedLot, setSelectedLot] = useState("");
-  const [selectedVehicle, setSelectedVehicle] = useState("");
+  const [vehicleNumber, setVehicleNumber] = useState("");
   const [error, setError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [statusTone, setStatusTone] = useState("info");
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState('available');
 
   useEffect(() => {
     fetchLots()
       .then(setLots)
       .catch((err) => {
         console.error("Error fetching lots:", err);
-        setError("Could not connect to Django backend. Ensure it is running on port 8001.");
+        setError("Could not connect to Django backend. Ensure it is running on port 8000.");
       });
   }, []);
 
-  async function loadSlots() {
+  function handleLotChange(event) {
+    setSelectedLot(event.target.value);
+    setSlots([]);
+    setError("");
+  }
+
+  async function loadSlots(forFilter = filter) {
     if (!selectedLot) {
       setError("Please select a lot first");
       return;
     }
     try {
       setError("");
-      // Ensure we pass the selectedLot ID correctly
-      const parsed = await fetchAvailableSlots(selectedLot);
+      setStatusMessage("");
+      setLoading(true);
+      const parsed = await fetchAvailableSlots(selectedLot, forFilter);
       setSlots(parsed);
     } catch (err) {
       setError("Failed to load slots: " + err.message);
+      setSlots([]);
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <main style={{ maxWidth: 800, margin: "20px auto", fontFamily: "sans-serif", padding: "0 20px" }}>
-      <h1>Parking Management Dashboard</h1>
+    <main>
+      <h1>Parking Dashboard</h1>
 
-      <div style={{ marginBottom: 12 }}>
-        <label htmlFor="lot" style={{ fontWeight: 'bold' }}>Parking Lot: </label>
-        <select 
-          id="lot" 
-          value={selectedLot} 
-          onChange={(e) => setSelectedLot(e.target.value)}
-          style={{ padding: "5px", marginLeft: "10px" }}
-        >
-          <option value="">Select lot</option>
-          {lots.map((lot) => (
-            <option key={lot.id} value={lot.id}>
-              {lot.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <label htmlFor="vehicle" style={{ fontWeight: 'bold' }}>Vehicle ID: </label>
-        <input
-          id="vehicle"
-          type="number"
-          placeholder="e.g. 5"
-          value={selectedVehicle}
-          onChange={(e) => setSelectedVehicle(e.target.value)}
-          style={{ padding: "5px", marginLeft: "10px", width: "60px" }}
-        />
-      </div>
-
-      <button 
-        onClick={loadSlots}
-        style={{ padding: "8px 16px", cursor: "pointer", backgroundColor: "#0070f3", color: "white", border: "none", borderRadius: "4px" }}
-      >
-        Load Available Slots
-      </button>
-
-      {error ? (
-        <div style={{ backgroundColor: "#ffeeee", border: "1px solid red", padding: "10px", marginTop: "15px", borderRadius: "4px" }}>
-          <p style={{ color: "red", margin: 0 }}>{error}</p>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+        <div>
+          <label htmlFor="lot" style={{ fontWeight: '600', marginRight: 8 }}>Parking Lot</label>
+          <select id="lot" value={selectedLot} onChange={handleLotChange}>
+            <option value="">Select lot</option>
+            {lots.map((lot) => (
+              <option key={lot.id} value={lot.id}>{lot.name}</option>
+            ))}
+          </select>
         </div>
-      ) : null}
 
-      <hr style={{ margin: "30px 0", border: "0", borderTop: "1px solid #eaeaea" }} />
+        <div>
+          <label htmlFor="vehicle" style={{ fontWeight: '600', marginRight: 8 }}>Vehicle / Number Plate</label>
+          <input
+            id="vehicle"
+            type="text"
+            placeholder="e.g. KA05AB1234 or AB-123"
+            value={vehicleNumber}
+            onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
+            maxLength={20}
+            autoCapitalize="characters"
+            spellCheck={false}
+            style={{ width: 170, textTransform: 'uppercase' }}
+          />
+        </div>
+
+        <div>
+          <button onClick={() => loadSlots()} className="filter-btn">Load Slots</button>
+        </div>
+      </div>
+
+      {error ? <div className="error">{error}</div> : null}
+      {statusMessage ? <div className={`status-banner ${statusTone}`}>{statusMessage}</div> : null}
+
+      <div className="filter-bar">
+        {FILTERS.map(f => (
+          <button
+            key={f.key}
+            className={`filter-btn ${filter === f.key ? 'active' : ''}`}
+            onClick={() => { setFilter(f.key); loadSlots(f.key); }}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <hr style={{ margin: '18px 0', border: 0, borderTop: '1px solid #eee' }} />
 
       <h3>Slots</h3>
-      {slots.length > 0 ? (
-        <SlotGrid 
-          slots={slots} 
-          selectedVehicle={parseInt(selectedVehicle)} 
-          fetchSlots={loadSlots} 
-        />
+
+      {loading ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="skeleton" style={{ height: 60 }}></div>
+          ))}
+        </div>
       ) : (
-        <p style={{ color: "#666" }}>No slots loaded. Select a lot and click the button above.</p>
+        slots.length > 0 ? (
+          <SlotGrid
+            slots={slots}
+            vehicleNumber={vehicleNumber}
+            fetchSlots={() => loadSlots()}
+            onStatus={({ type, message }) => {
+              setStatusTone(type === 'error' ? 'error' : 'success');
+              setStatusMessage(message);
+            }}
+          />
+        ) : (
+          <p className="small-muted">No slots loaded. Select a lot and click "Load Slots".</p>
+        )
       )}
     </main>
   );

@@ -1,6 +1,54 @@
+# Dependencies
 node_modules/
-venv/
+.next/
+backend-django/.venv/
+backend-django/venv/
+frontend-nextjs/node_modules/
+
+# Python
 __pycache__/
-*.pyc
-.DS_Store
+*.py[cod]
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+*.log
+*.pot
+*.py,cover
+.coverage
+.pytest_cache/
+htmlcov/
+.mypy_cache/
+.pytype/
+
+# Django
+backend-django/staticfiles/
+backend-django/media/
+backend-django/.env
+
+# Environment files
 .env
+.env.local
+.env.*.local
+
+# OS/editor files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build outputs
+build/
+dist/
+out/
+coverage/
+
+# Local data / runtime
+*.pid
+*.seed
+*.tsbuildinfo
+
+# Ignore virtual environments everywhere
+venv/
+**/venv/
