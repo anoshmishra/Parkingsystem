@@ -10,7 +10,7 @@
   { "model": "parking.slot", "pk": 5, "fields": { "lot": 1, "number": 5, "is_occupied": false } },
 
   { "model": "parking.slot", "pk": 6, "fields": { "lot": 2, "number": 1, "is_occupied": false } },
-  { "model": "parking.slot", "pk": 7, "fields": { "lot": 2, "number": 2, "is_occupied": true } },
+  { "model": "parking.slot", "pk": 7, "fields": { "lot": 2, "number": 2, "is_occupied": false } },
   { "model": "parking.slot", "pk": 8, "fields": { "lot": 2, "number": 3, "is_occupied": false } },
   { "model": "parking.slot", "pk": 9, "fields": { "lot": 2, "number": 4, "is_occupied": false } },
   { "model": "parking.slot", "pk": 10, "fields": { "lot": 2, "number": 5, "is_occupied": false } },
