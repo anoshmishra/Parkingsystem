@@ -14,9 +14,30 @@ def csv_env(name, default=""):
     ]
 
 
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
-DEBUG = os.getenv("DEBUG", "False") == "True"
-ALLOWED_HOSTS = csv_env("ALLOWED_HOSTS", "localhost,127.0.0.1")
+def bool_env(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+IS_HOSTED = bool(os.getenv("RENDER") or os.getenv("DJANGO_ENV") == "production")
+DEBUG = bool_env("DEBUG", default=not IS_HOSTED)
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "dev-secret-key"
+    else:
+        raise RuntimeError("SECRET_KEY must be set when DEBUG is disabled.")
+
+DEFAULT_ALLOWED_HOSTS = "localhost,127.0.0.1" if DEBUG else os.getenv("RENDER_EXTERNAL_HOSTNAME", "")
+ALLOWED_HOSTS = csv_env("ALLOWED_HOSTS", DEFAULT_ALLOWED_HOSTS)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -63,13 +84,15 @@ TEMPLATES = [
 WSGI_APPLICATION = "parking_project.wsgi.application"
 ASGI_APPLICATION = "parking_project.asgi.application"
 
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    if DEBUG:
+        DATABASE_URL = "postgres://parking_user:parking_pass@127.0.0.1:5432/parking_db"
+    else:
+        raise RuntimeError("DATABASE_URL must be set when DEBUG is disabled.")
+
 DATABASES = {
-    "default": dj_database_url.config(
-        default=os.getenv(
-            "DATABASE_URL",
-            "postgres://parking_user:parking_pass@127.0.0.1:5432/parking_db",
-        )
-    )
+    "default": dj_database_url.config(default=DATABASE_URL)
 }
 
 AUTH_PASSWORD_VALIDATORS = []
@@ -90,12 +113,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = csv_env(
     "CORS_ALLOWED_ORIGINS",
-    ",".join(
-        [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "https://parkingsystem-anosh-9zwternpw-anoshmishras-projects.vercel.app",
-        ]
-    ),
+    "http://localhost:3000,http://127.0.0.1:3000" if DEBUG else "",
 )
 CORS_ALLOWED_ORIGIN_REGEXES = csv_env("CORS_ALLOWED_ORIGIN_REGEXES")

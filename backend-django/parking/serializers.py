@@ -1,40 +1,131 @@
 from rest_framework import serializers
-from .models import ParkingLot, Slot, Vehicle, Booking
+
+from .models import Booking, BookingHistory, Facility, ParkingLot, ParkingSlot, Vehicle, VehicleType
+from .services import BookingService
+
+
+class VehicleTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VehicleType
+        fields = ["id", "name", "slug", "description", "icon", "active"]
+
+
+class FacilitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Facility
+        fields = ["id", "name", "slug", "icon", "active"]
 
 
 class ParkingLotSerializer(serializers.ModelSerializer):
+    vehicle_types = VehicleTypeSerializer(many=True, read_only=True)
+    facilities = FacilitySerializer(many=True, read_only=True)
+    available_slot_count = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = ParkingLot
-        fields = '__all__'
+        fields = [
+            "id",
+            "name",
+            "address",
+            "latitude",
+            "longitude",
+            "description",
+            "opening_hours",
+            "capacity",
+            "security_rating",
+            "price_hint",
+            "distance_km",
+            "walking_time_minutes",
+            "is_ev_charging",
+            "is_covered",
+            "is_24x7",
+            "map_link",
+            "image_url",
+            "recommended",
+            "active",
+            "vehicle_types",
+            "facilities",
+            "available_slot_count",
+        ]
 
 
-class SlotSerializer(serializers.ModelSerializer):
-    is_occupied = serializers.SerializerMethodField()
+class ParkingSlotSerializer(serializers.ModelSerializer):
+    parking_lot = serializers.PrimaryKeyRelatedField(read_only=True)
+    vehicle_types = VehicleTypeSerializer(many=True, read_only=True)
+    status = serializers.CharField(read_only=True)
 
     class Meta:
-        model = Slot
-        fields = '__all__'
-
-    def get_is_occupied(self, instance):
-        active_booking = getattr(instance, 'has_active_booking', None)
-        if active_booking is not None:
-            return active_booking
-        return instance.is_occupied
+        model = ParkingSlot
+        fields = [
+            "id",
+            "parking_lot",
+            "number",
+            "zone",
+            "floor",
+            "vehicle_types",
+            "is_occupied",
+            "reserved",
+            "maintenance",
+            "disabled",
+            "ev_charger",
+            "covered",
+            "priority",
+            "status",
+        ]
 
 
 class VehicleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehicle
-        fields = '__all__'
+        fields = ["id", "number_plate", "vehicle_type"]
+
+
+class BookingHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BookingHistory
+        fields = ["id", "action", "details", "created_at"]
 
 
 class BookingSerializer(serializers.ModelSerializer):
+    vehicle_type = VehicleTypeSerializer(read_only=True)
+    parking_lot = ParkingLotSerializer(read_only=True)
+    slot = ParkingSlotSerializer(read_only=True)
+
     class Meta:
         model = Booking
-        fields = ['id', 'vehicle', 'slot', 'start_time', 'end_time']
+        fields = [
+            "id",
+            "booking_id",
+            "vehicle_number",
+            "vehicle_type",
+            "parking_lot",
+            "slot",
+            "status",
+            "payment_status",
+            "start_time",
+            "end_time",
+            "duration_minutes",
+            "reservation_expires_at",
+            "created_at",
+            "updated_at",
+        ]
 
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        representation['vehicle'] = VehicleSerializer(instance.vehicle).data
-        representation['slot'] = SlotSerializer(instance.slot).data
-        return representation
+
+class BookingCreateSerializer(serializers.Serializer):
+    vehicle_number = serializers.CharField(max_length=20)
+    vehicle_type = serializers.PrimaryKeyRelatedField(queryset=VehicleType.objects.all())
+    parking_lot = serializers.PrimaryKeyRelatedField(queryset=ParkingLot.objects.all())
+    slot = serializers.PrimaryKeyRelatedField(queryset=ParkingSlot.objects.all())
+    reservation_minutes = serializers.IntegerField(required=False, default=15, min_value=5, max_value=240)
+
+    def create(self, validated_data):
+        try:
+            return BookingService.create_booking(
+                vehicle_number=validated_data["vehicle_number"],
+                vehicle_type=validated_data["vehicle_type"],
+                parking_lot=validated_data["parking_lot"],
+                slot=validated_data["slot"],
+                reservation_minutes=validated_data.get("reservation_minutes", 15),
+            )
+        except ValueError as exc:
+            raise serializers.ValidationError({"detail": str(exc)}) from exc
