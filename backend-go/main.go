@@ -83,9 +83,10 @@ func activeBookingsHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 func occupancyHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	rows, err := db.Query(`
-		SELECT l.id, l.name, COUNT(s.id) FILTER (WHERE s.is_occupied = true) AS occupied_count
+		SELECT l.id, l.name, COUNT(DISTINCT b.slot_id) AS occupied_count
 		FROM parking_parkinglot l
 		LEFT JOIN parking_slot s ON l.id = s.lot_id
+		LEFT JOIN parking_booking b ON b.slot_id = s.id AND b.end_time IS NULL
 		GROUP BY l.id, l.name
 		ORDER BY l.id
 	`)

@@ -83,5 +83,5 @@ STATICFILES_STORAGE = (
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = [
-    "https://parkingsystem-anosh.vercel.app",
+    "https://parkingsystem-anosh-9zwternpw-anoshmishras-projects.vercel.app",
 ]
