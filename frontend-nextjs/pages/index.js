@@ -27,6 +27,8 @@ export default function HomePage() {
       .then((rows) => {
         if (!isCurrent) return;
 
+        // eslint-disable-next-line no-console
+        console.log('[page] fetched lots, setting state to', rows);
         setLots(rows);
         setLotsLoaded(true);
         if (rows.length === 0) {
@@ -38,7 +40,8 @@ export default function HomePage() {
 
         console.error("Error fetching lots:", err);
         setLotsLoaded(true);
-        setError(`Could not connect to Django backend at ${API_BASE}.`);
+        // Show a concise error message. Keep original message for debugging in console.
+        setError(`Could not fetch parking lots from backend.`);
       });
 
     return () => {
@@ -83,10 +86,15 @@ export default function HomePage() {
         <div>
           <label htmlFor="lot" style={{ fontWeight: '600', marginRight: 8 }}>Parking Lot</label>
           <select id="lot" value={selectedLot} onChange={handleLotChange} disabled={!lotsLoaded || lots.length === 0}>
-            <option value="">{lotsLoaded && lots.length === 0 ? "No lots available" : "Select lot"}</option>
-            {lots.map((lot) => (
-              <option key={lot.id} value={lot.id}>{lot.name}</option>
-            ))}
+              <option value="">{lotsLoaded && lots.length === 0 ? "No lots available" : "Select lot"}</option>
+              {/* Log props passed into the select for debugging */}
+              {(
+                // eslint-disable-next-line no-console
+                console.log('[page] rendering select with lots', lots) ||
+                lots
+              ).map((lot) => (
+                <option key={lot.id} value={lot.id}>{lot.name}</option>
+              ))}
           </select>
         </div>
 
