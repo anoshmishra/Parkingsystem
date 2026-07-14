@@ -4,8 +4,14 @@ export default async function handler(req, res) {
   const { id } = req.query;
   try {
     const url = new URL(`${BACKEND.replace(/\/+$/, '')}/api/lots/${id}/slots/available/`);
-    // preserve filter param if present
-    if (req.query.filter) url.searchParams.set('filter', req.query.filter);
+    Object.entries(req.query || {}).forEach(([key, value]) => {
+      if (key === 'id') return;
+      if (Array.isArray(value)) {
+        value.forEach((entry) => url.searchParams.append(key, entry));
+      } else if (value !== undefined) {
+        url.searchParams.set(key, value);
+      }
+    });
 
     const r = await fetch(url.toString());
     const text = await r.text();

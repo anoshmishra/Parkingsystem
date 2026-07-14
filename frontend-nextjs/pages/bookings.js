@@ -1,30 +1,52 @@
 import { useEffect, useState } from "react";
-import { fetchActiveBookingsReport, fetchBookings } from "../lib/api";
+import { fetchBookings } from "../lib/api";
 
 export default function BookingsPage() {
   const [bookings, setBookings] = useState([]);
-  const [activeReport, setActiveReport] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    Promise.all([fetchBookings(), fetchActiveBookingsReport()])
-      .then(([bookingRows, reportRows]) => {
-        setBookings(bookingRows);
-        setActiveReport(reportRows);
-      })
+    fetchBookings()
+      .then((rows) => setBookings(rows || []))
       .catch((err) => setError(err.message));
   }, []);
 
   return (
-    <main style={{ maxWidth: 900, margin: "20px auto", fontFamily: "sans-serif" }}>
-      <h1>Bookings</h1>
-      {error ? <p style={{ color: "red" }}>{error}</p> : null}
+    <main className="shell">
+      <section className="hero-card compact">
+        <div>
+          <p className="eyebrow">Operations</p>
+          <h1>Booking intelligence</h1>
+          <p className="subtle">Live reservation activity and status trends for your parking network.</p>
+        </div>
+      </section>
 
-      <h3>Django Bookings API</h3>
-      <pre>{JSON.stringify(bookings, null, 2)}</pre>
+      {error ? <div className="error-card">{error}</div> : null}
 
-      <h3>Go Active Bookings Report</h3>
-      <pre>{JSON.stringify(activeReport, null, 2)}</pre>
+      <section className="card-panel">
+        {bookings.length ? (
+          <div className="booking-list">
+            {bookings.map((booking) => (
+              <article key={booking.id} className="booking-card">
+                <div>
+                  <div className="booking-title-row">
+                    <strong>{booking.booking_id}</strong>
+                    <span className={`pill ${booking.status === "reserved" ? "accent" : ""}`}>{booking.status}</span>
+                  </div>
+                  <p>{booking.vehicle_number} • {booking.vehicle_type?.name}</p>
+                  <p>{booking.parking_lot?.name} • Slot {booking.slot?.number}</p>
+                </div>
+                <div className="booking-meta">
+                  <span>Started {new Date(booking.start_time).toLocaleString()}</span>
+                  <span>Expires {booking.reservation_expires_at ? new Date(booking.reservation_expires_at).toLocaleString() : "—"}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="subtle">No bookings have been recorded yet.</p>
+        )}
+      </section>
     </main>
   );
 }

@@ -2,7 +2,16 @@ const BACKEND = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_DJANG
 
 export default async function handler(req, res) {
   try {
-    const r = await fetch(`${BACKEND.replace(/\/+$/, '')}/api/lots/`);
+    const url = new URL(`${BACKEND.replace(/\/+$/, '')}/api/lots/`);
+    Object.entries(req.query || {}).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        value.forEach((entry) => url.searchParams.append(key, entry));
+      } else if (value !== undefined) {
+        url.searchParams.set(key, value);
+      }
+    });
+
+    const r = await fetch(url.toString());
     const text = await r.text();
     try {
       const json = JSON.parse(text);

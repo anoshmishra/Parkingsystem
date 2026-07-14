@@ -6,22 +6,25 @@ const rawApiBase =
 // Keep the full backend URL for server-side calls, but use a same-origin proxy
 // on the client to avoid CORS restrictions when the frontend is deployed.
 const API_BASE_SERVER = rawApiBase.replace(/\/+$/, "");
-export const API_BASE = typeof window === 'undefined' ? API_BASE_SERVER : "";
+export const API_BASE = typeof window === "undefined" ? API_BASE_SERVER : "";
+
+function buildApiUrl(path, params = {}) {
+  const base = API_BASE || "";
+  const url = new URL(`${base}${path}`, typeof window === "undefined" ? "http://next-proxy.invalid" : window.location.origin);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  });
+  return url.toString();
+}
 
 async function readJsonResponse(res, fallbackMessage) {
   let json = null;
   try {
-    // Log raw response status for debugging
-    // (kept minimal; removed in production if desired)
-    // eslint-disable-next-line no-console
-    console.log('[api] raw response status', res.status, res.url);
     json = await res.json();
-    // eslint-disable-next-line no-console
-    console.log('[api] parsed json', json);
-  } catch (err) {
+  } catch (error) {
     // Some failures return an empty body or plain text.
-    // eslint-disable-next-line no-console
-    console.warn('[api] failed to parse JSON body', err && err.message);
   }
 
   if (!res.ok) {
@@ -31,51 +34,33 @@ async function readJsonResponse(res, fallbackMessage) {
   return json;
 }
 
-export async function fetchLots() {
-  // Client-side: this will hit the Next.js proxy at `/api/lots`
-  const url = `${API_BASE}/api/lots/`;
-  // eslint-disable-next-line no-console
-  console.log('[api] fetching lots from', url);
-  const res = await fetch(url);
-  const parsed = await readJsonResponse(res, "Failed to fetch lots");
-  // eslint-disable-next-line no-console
-  console.log('[api] fetchLots result', parsed);
-  return parsed;
+export async function fetchVehicleTypes() {
+  const res = await fetch(buildApiUrl("/api/vehicle-types/"));
+  return readJsonResponse(res, "Failed to fetch vehicle types");
 }
 
-export async function fetchAvailableSlots(lotId, filter = 'available') {
-  // Build a same-origin path for client and absolute URL for server-side
-  const base = API_BASE || '';
-  let path = `${base}/api/lots/${lotId}/slots/available/`;
-  if (filter) {
-    const qs = new URLSearchParams({ filter }).toString();
-    path = `${path}?${qs}`;
-  }
+export async function fetchLots(vehicleType = "") {
+  const url = buildApiUrl("/api/lots/", vehicleType ? { vehicle_type: vehicleType } : {});
+  const res = await fetch(url);
+  return readJsonResponse(res, "Failed to fetch lots");
+}
 
-  // eslint-disable-next-line no-console
-  console.log('[api] fetching slots from', path);
-  const res = await fetch(path);
-  const parsed = await readJsonResponse(res, "Failed to fetch slots");
-  // eslint-disable-next-line no-console
-  console.log('[api] fetchAvailableSlots result', parsed);
-  return parsed;
+export async function fetchAvailableSlots(lotId, filter = "available", vehicleType = "") {
+  const params = { filter, vehicle_type: vehicleType };
+  const res = await fetch(buildApiUrl(`/api/lots/${lotId}/slots/available/`, params));
+  return readJsonResponse(res, "Failed to fetch slots");
 }
 
 export async function createBooking(payload) {
-  const res = await fetch(`${API_BASE}/api/bookings/`, {
+  const res = await fetch(buildApiUrl("/api/bookings/"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
   return readJsonResponse(res, "Failed to create booking");
 }
 
 export async function fetchBookings() {
-  const res = await fetch(`${API_BASE}/api/bookings/`);
+  const res = await fetch(buildApiUrl("/api/bookings/"));
   return readJsonResponse(res, "Failed to fetch bookings");
-}
-
-export async function fetchActiveBookingsReport() {
-  const res = await fetch(`${API_BASE}/api/bookings/`);
-  return readJsonResponse(res, "Failed to fetch active bookings report");
 }

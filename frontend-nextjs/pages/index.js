@@ -1,164 +1,302 @@
-import { useEffect, useState } from "react";
-import SlotGrid from "../components/SlotGrid";
-import { API_BASE, fetchAvailableSlots, fetchLots } from "../lib/api";
+import { useEffect, useMemo, useState } from "react";
+import { createBooking, fetchAvailableSlots, fetchLots, fetchVehicleTypes } from "../lib/api";
 
-const FILTERS = [
-  { key: 'available', label: 'Available' },
-  { key: 'occupied', label: 'Occupied' },
-  { key: 'all', label: 'All' }
-]
+const STEPS = ["Vehicle details", "Choose parking", "Confirm booking"];
+
+function formatCurrency(value) {
+  const amount = Number(value || 0);
+  return `₹${amount.toLocaleString("en-IN")}`;
+}
 
 export default function HomePage() {
+  const [vehicleTypes, setVehicleTypes] = useState([]);
   const [lots, setLots] = useState([]);
-  const [slots, setSlots] = useState([]);
-  const [selectedLot, setSelectedLot] = useState("");
+  const [selectedVehicleType, setSelectedVehicleType] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
-  const [error, setError] = useState("");
-  const [statusMessage, setStatusMessage] = useState("");
-  const [statusTone, setStatusTone] = useState("info");
+  const [selectedLot, setSelectedLot] = useState(null);
+  const [slots, setSlots] = useState([]);
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [lotsLoaded, setLotsLoaded] = useState(false);
-  const [filter, setFilter] = useState('available');
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState({ type: "info", message: "" });
+  const [bookingResult, setBookingResult] = useState(null);
+
+  const activeVehicleType = useMemo(
+    () => vehicleTypes.find((entry) => entry.id === Number(selectedVehicleType)) || null,
+    [selectedVehicleType, vehicleTypes]
+  );
 
   useEffect(() => {
-    let isCurrent = true;
+    let active = true;
 
-    fetchLots()
+    fetchVehicleTypes()
       .then((rows) => {
-        if (!isCurrent) return;
-
-        // eslint-disable-next-line no-console
-        console.log('[page] fetched lots, setting state to', rows);
-        setLots(rows);
-        setLotsLoaded(true);
-        if (rows.length === 0) {
-          setError("No parking lots found in the backend database. Run the seed command on the deployed Django service.");
+        if (!active) return;
+        setVehicleTypes(rows || []);
+        if (rows?.[0]) {
+          setSelectedVehicleType(String(rows[0].id));
         }
       })
-      .catch((err) => {
-        if (!isCurrent) return;
-
-        console.error("Error fetching lots:", err);
-        setLotsLoaded(true);
-        // Show a concise error message. Keep original message for debugging in console.
-        setError(`Could not fetch parking lots from backend.`);
+      .catch(() => {
+        if (!active) return;
+        setError("Unable to load vehicle types right now.");
       });
 
     return () => {
-      isCurrent = false;
+      active = false;
     };
   }, []);
 
-  function handleLotChange(event) {
-    setSelectedLot(event.target.value);
-    setSlots([]);
-    setError("");
-  }
+  async function loadLots() {
+    if (!selectedVehicleType) {
+      setError("Please select a vehicle type first.");
+      return;
+    }
+    if (!vehicleNumber.trim()) {
+      setError("Enter a vehicle number to continue.");
+      return;
+    }
 
-  async function loadSlots(forFilter = filter) {
-    if (lotsLoaded && lots.length === 0) {
-      setError("No parking lots found in the backend database. Run the seed command on the deployed Django service.");
-      return;
-    }
-    if (!selectedLot) {
-      setError("Please select a lot first");
-      return;
-    }
     try {
       setError("");
-      setStatusMessage("");
       setLoading(true);
-      const parsed = await fetchAvailableSlots(selectedLot, forFilter);
-      setSlots(parsed);
+      const rows = await fetchLots(selectedVehicleType);
+      setLots(rows || []);
+      setSelectedLot(null);
+      setSlots([]);
+      setBookingResult(null);
+      setStep(2);
+      if (!rows?.length) {
+        setStatus({ type: "info", message: "No compatible parking lots are available for this vehicle type yet." });
+      }
     } catch (err) {
-      setError("Failed to load slots: " + err.message);
+      setError(err.message || "Failed to load parking lots.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function selectLot(lot) {
+    setSelectedLot(lot);
+    setError("");
+    setStatus({ type: "info", message: "Allocating the best available slot…" });
+    setLoading(true);
+    try {
+      const rows = await fetchAvailableSlots(lot.id, "available", selectedVehicleType);
+      setSlots(rows || []);
+      setStep(3);
+    } catch (err) {
+      setError(err.message || "Unable to load slots for this lot.");
       setSlots([]);
     } finally {
       setLoading(false);
     }
   }
 
+  async function confirmBooking() {
+    if (!selectedLot || !selectedVehicleType || !vehicleNumber.trim()) {
+      setError("Complete the booking details before confirming.");
+      return;
+    }
+
+    const bestSlot = slots.find((slot) => !slot.is_occupied && !slot.reserved && !slot.maintenance && !slot.disabled) || null;
+    if (!bestSlot) {
+      setError("No compatible slots are currently available for this lot.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const response = await createBooking({
+        vehicle_number: vehicleNumber.trim().toUpperCase(),
+        vehicle_type: Number(selectedVehicleType),
+        parking_lot: selectedLot.id,
+        slot: bestSlot.id,
+        reservation_minutes: 15,
+      });
+      setBookingResult(response);
+      setStatus({ type: "success", message: "Booking confirmed. Your reservation is active." });
+      setStep(3);
+    } catch (err) {
+      setError(err.message || "Booking could not be created.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <main>
-      <h1>Parking Dashboard</h1>
-
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+    <main className="shell">
+      <section className="hero-card">
         <div>
-          <label htmlFor="lot" style={{ fontWeight: '600', marginRight: 8 }}>Parking Lot</label>
-          <select id="lot" value={selectedLot} onChange={handleLotChange} disabled={!lotsLoaded || lots.length === 0}>
-              <option value="">{lotsLoaded && lots.length === 0 ? "No lots available" : "Select lot"}</option>
-              {/* Log props passed into the select for debugging */}
-              {(
-                // eslint-disable-next-line no-console
-                console.log('[page] rendering select with lots', lots) ||
-                lots
-              ).map((lot) => (
-                <option key={lot.id} value={lot.id}>{lot.name}</option>
-              ))}
-          </select>
+          <p className="eyebrow">Smart multi-vehicle parking</p>
+          <h1>Reserve a premium parking experience in minutes.</h1>
+          <p className="subtle">Guided booking flow, vehicle-aware lot filtering, and instant slot allocation.</p>
         </div>
+        <div className="hero-badge">Live availability</div>
+      </section>
 
-        <div>
-          <label htmlFor="vehicle" style={{ fontWeight: '600', marginRight: 8 }}>Vehicle / Number Plate</label>
-          <input
-            id="vehicle"
-            type="text"
-            placeholder="e.g. KA05AB1234 or AB-123"
-            value={vehicleNumber}
-            onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
-            maxLength={20}
-            autoCapitalize="characters"
-            spellCheck={false}
-            style={{ width: 170, textTransform: 'uppercase' }}
-          />
-        </div>
-
-        <div>
-          <button onClick={() => loadSlots()} className="filter-btn" disabled={!lotsLoaded || lots.length === 0}>Load Slots</button>
-        </div>
-      </div>
-
-      {error ? <div className="error">{error}</div> : null}
-      {statusMessage ? <div className={`status-banner ${statusTone}`}>{statusMessage}</div> : null}
-
-      <div className="filter-bar">
-        {FILTERS.map(f => (
-          <button
-            key={f.key}
-            className={`filter-btn ${filter === f.key ? 'active' : ''}`}
-            disabled={!lotsLoaded || lots.length === 0}
-            onClick={() => { setFilter(f.key); loadSlots(f.key); }}
-          >
-            {f.label}
-          </button>
+      <section className="stepper">
+        {STEPS.map((label, index) => (
+          <div key={label} className={`step ${step >= index + 1 ? "active" : ""}`}>
+            <span>{index + 1}</span>
+            <strong>{label}</strong>
+          </div>
         ))}
-      </div>
+      </section>
 
-      <hr style={{ margin: '18px 0', border: 0, borderTop: '1px solid #eee' }} />
+      {error ? <div className="error-card">{error}</div> : null}
+      {status.message ? <div className={`status-banner ${status.type}`}>{status.message}</div> : null}
 
-      <h3>Slots</h3>
+      {step === 1 ? (
+        <section className="card-stack">
+          <div className="card-panel">
+            <h2>Step 1 • Vehicle details</h2>
+            <label className="field-label" htmlFor="vehicle-number">Vehicle Number</label>
+            <input
+              id="vehicle-number"
+              className="field"
+              value={vehicleNumber}
+              onChange={(event) => setVehicleNumber(event.target.value.toUpperCase())}
+              placeholder="Example: OD02AB1234"
+              maxLength={20}
+            />
 
-      {loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="skeleton" style={{ height: 60 }}></div>
-          ))}
-        </div>
-      ) : (
-        slots.length > 0 ? (
-          <SlotGrid
-            slots={slots}
-            vehicleNumber={vehicleNumber}
-            fetchSlots={() => loadSlots()}
-            onStatus={({ type, message }) => {
-              setStatusTone(type === 'error' ? 'error' : 'success');
-              setStatusMessage(message);
-            }}
-          />
-        ) : (
-          <p className="small-muted">No slots loaded. Select a lot and click "Load Slots".</p>
-        )
-      )}
+            <label className="field-label">Vehicle Type</label>
+            <div className="vehicle-grid">
+              {vehicleTypes.map((vehicleType) => (
+                <button
+                  key={vehicleType.id}
+                  className={`vehicle-card ${selectedVehicleType === String(vehicleType.id) ? "selected" : ""}`}
+                  onClick={() => setSelectedVehicleType(String(vehicleType.id))}
+                >
+                  <strong>{vehicleType.name}</strong>
+                  <span>{vehicleType.description || "Flexible parking support"}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="actions">
+              <button className="primary-btn" onClick={loadLots} disabled={loading}>
+                {loading ? "Searching…" : "Continue to parking options"}
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {step >= 2 ? (
+        <section className="card-stack">
+          <div className="card-panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Step 2 • Choose parking</p>
+                <h2>{activeVehicleType?.name || "Selected vehicle"} parking options</h2>
+              </div>
+              <div className="pill">{vehicleNumber}</div>
+            </div>
+
+            {loading && !selectedLot ? (
+              <div className="skeleton-grid">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="skeleton-card" />
+                ))}
+              </div>
+            ) : (
+              <div className="lot-grid">
+                {lots.map((lot) => (
+                  <button key={lot.id} className={`lot-card ${selectedLot?.id === lot.id ? "selected" : ""}`} onClick={() => selectLot(lot)}>
+                    <div className="lot-topline">
+                      <div>
+                        <h3>{lot.name}</h3>
+                        <p>{lot.address}</p>
+                      </div>
+                      {lot.recommended ? <span className="pill accent">Recommended</span> : null}
+                    </div>
+                    <div className="meta-row">
+                      <span>Available slots • {lot.available_slot_count}</span>
+                      <span>{formatCurrency(lot.price_hint)}</span>
+                    </div>
+                    <div className="meta-row small">
+                      <span>{lot.is_covered ? "Covered" : "Open"}</span>
+                      <span>{lot.is_ev_charging ? "EV charging" : "Standard"}</span>
+                      <span>{lot.is_24x7 ? "24/7" : "Limited"}</span>
+                    </div>
+                    <div className="meta-row small">
+                      <span>Security {lot.security_rating}/5</span>
+                      <span>{lot.walking_time_minutes} min walk</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {step >= 3 ? (
+        <section className="card-stack">
+          <div className="card-panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Step 3 • Confirm reservation</p>
+                <h2>Your booking summary</h2>
+              </div>
+              <div className="pill">{selectedLot?.name || "Selected lot"}</div>
+            </div>
+
+            {selectedLot ? (
+              <div className="summary-grid">
+                <div className="summary-card">
+                  <h3>Parking</h3>
+                  <p>{selectedLot.name}</p>
+                  <p>{selectedLot.address}</p>
+                  <p>Security rating: {selectedLot.security_rating}/5</p>
+                </div>
+                <div className="summary-card">
+                  <h3>Vehicle</h3>
+                  <p>{vehicleNumber}</p>
+                  <p>{activeVehicleType?.name}</p>
+                  <p>Reservation window: 15 min</p>
+                </div>
+              </div>
+            ) : null}
+
+            {loading ? (
+              <div className="skeleton-card large" />
+            ) : (
+              <>
+                <div className="slot-row">
+                  {slots.length ? (
+                    slots.slice(0, 6).map((slot) => (
+                      <div key={slot.id} className={`slot-chip ${slot.is_occupied || slot.reserved ? "occupied" : ""}`}>
+                        Slot {slot.number} • {slot.zone}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="subtle">No slots are currently available for this selection.</p>
+                  )}
+                </div>
+
+                <div className="actions">
+                  <button className="primary-btn" onClick={confirmBooking} disabled={!selectedLot || loading}>
+                    Confirm booking
+                  </button>
+                </div>
+              </>
+            )}
+
+            {bookingResult ? (
+              <div className="confirmation-card">
+                <div className="confirmation-badge">Booking confirmed</div>
+                <h3>Booking ID {bookingResult.booking_id}</h3>
+                <p>Vehicle {bookingResult.vehicle_number} is parked securely at {selectedLot?.name}.</p>
+                <p>Slot {bookingResult.slot?.number} • Floor {bookingResult.slot?.floor || 1}</p>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }
