@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.test import TestCase
 from django.utils import timezone
 
@@ -13,6 +15,8 @@ class ParkingServiceTests(TestCase):
         self.lot.vehicle_types.add(self.car_type, self.ev_type)
         self.slot = ParkingSlot.objects.create(parking_lot=self.lot, number=1, zone="A", floor=1)
         self.slot.vehicle_types.add(self.car_type)
+        self.ev_slot = ParkingSlot.objects.create(parking_lot=self.lot, number=2, zone="A", floor=1)
+        self.ev_slot.vehicle_types.add(self.ev_type)
 
     def test_lot_supports_vehicle_type(self):
         self.assertTrue(self.lot.supports_vehicle_type(self.car_type))
@@ -26,7 +30,7 @@ class ParkingServiceTests(TestCase):
             parking_lot=self.lot,
             slot=self.slot,
             status="reserved",
-            reservation_expires_at=timezone.now() + timezone.timedelta(minutes=15),
+            reservation_expires_at=timezone.now() + timedelta(minutes=15),
             start_time=timezone.now(),
         )
 
@@ -38,3 +42,50 @@ class ParkingServiceTests(TestCase):
                 slot=self.slot,
                 reservation_minutes=15,
             )
+
+    def test_create_booking_rejects_slot_marked_reserved(self):
+        self.slot.reserved = True
+        self.slot.save(update_fields=["reserved"])
+
+        with self.assertRaises(ValueError):
+            BookingService.create_booking(
+                vehicle_number="OD02AB9999",
+                vehicle_type=self.car_type,
+                parking_lot=self.lot,
+                slot=self.slot,
+                reservation_minutes=15,
+            )
+
+    def test_available_slots_exclude_active_booking_even_when_slot_flag_is_stale(self):
+        Booking.objects.create(
+            booking_id="B-1002",
+            vehicle_number="OD02AB5555",
+            vehicle_type=self.ev_type,
+            parking_lot=self.lot,
+            slot=self.ev_slot,
+            status="reserved",
+            reservation_expires_at=timezone.now() + timedelta(minutes=15),
+            start_time=timezone.now(),
+        )
+
+        response = self.client.get(f"/api/lots/{self.lot.pk}/slots/available/?vehicle_type={self.ev_type.pk}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_lot_available_count_respects_vehicle_type_filter(self):
+        Booking.objects.create(
+            booking_id="B-1003",
+            vehicle_number="OD02AB5555",
+            vehicle_type=self.ev_type,
+            parking_lot=self.lot,
+            slot=self.ev_slot,
+            status="reserved",
+            reservation_expires_at=timezone.now() + timedelta(minutes=15),
+            start_time=timezone.now(),
+        )
+
+        response = self.client.get(f"/api/lots/?vehicle_type={self.ev_type.pk}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]["available_slot_count"], 0)

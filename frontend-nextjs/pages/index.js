@@ -25,6 +25,10 @@ export default function HomePage() {
     () => vehicleTypes.find((entry) => entry.id === Number(selectedVehicleType)) || null,
     [selectedVehicleType, vehicleTypes]
   );
+  const bestAvailableSlot = useMemo(
+    () => slots.find((slot) => !slot.is_occupied && !slot.reserved && !slot.maintenance && !slot.disabled) || null,
+    [slots]
+  );
 
   useEffect(() => {
     let active = true;
@@ -35,6 +39,8 @@ export default function HomePage() {
         setVehicleTypes(rows || []);
         if (rows?.[0]) {
           setSelectedVehicleType(String(rows[0].id));
+        } else {
+          setStatus({ type: "info", message: "No active vehicle types are configured yet." });
         }
       })
       .catch(() => {
@@ -46,6 +52,18 @@ export default function HomePage() {
       active = false;
     };
   }, []);
+
+  function chooseVehicleType(vehicleTypeId) {
+    setSelectedVehicleType(String(vehicleTypeId));
+    setSelectedLot(null);
+    setLots([]);
+    setSlots([]);
+    setBookingResult(null);
+    setStatus({ type: "info", message: "" });
+    if (step > 1) {
+      setStep(1);
+    }
+  }
 
   async function loadLots() {
     if (!selectedVehicleType) {
@@ -65,10 +83,12 @@ export default function HomePage() {
       setSelectedLot(null);
       setSlots([]);
       setBookingResult(null);
+      setStatus(
+        rows?.length
+          ? { type: "info", message: "Choose a compatible parking lot to see available slots." }
+          : { type: "info", message: "No compatible parking lots are available for this vehicle type yet." }
+      );
       setStep(2);
-      if (!rows?.length) {
-        setStatus({ type: "info", message: "No compatible parking lots are available for this vehicle type yet." });
-      }
     } catch (err) {
       setError(err.message || "Failed to load parking lots.");
     } finally {
@@ -79,11 +99,17 @@ export default function HomePage() {
   async function selectLot(lot) {
     setSelectedLot(lot);
     setError("");
+    setBookingResult(null);
     setStatus({ type: "info", message: "Allocating the best available slot…" });
     setLoading(true);
     try {
       const rows = await fetchAvailableSlots(lot.id, "available", selectedVehicleType);
       setSlots(rows || []);
+      setStatus(
+        rows?.length
+          ? { type: "info", message: `Best slot ready: ${rows[0].zone}-${rows[0].number}.` }
+          : { type: "info", message: "No compatible slots are currently available for this lot." }
+      );
       setStep(3);
     } catch (err) {
       setError(err.message || "Unable to load slots for this lot.");
@@ -99,8 +125,7 @@ export default function HomePage() {
       return;
     }
 
-    const bestSlot = slots.find((slot) => !slot.is_occupied && !slot.reserved && !slot.maintenance && !slot.disabled) || null;
-    if (!bestSlot) {
+    if (!bestAvailableSlot) {
       setError("No compatible slots are currently available for this lot.");
       return;
     }
@@ -112,10 +137,11 @@ export default function HomePage() {
         vehicle_number: vehicleNumber.trim().toUpperCase(),
         vehicle_type: Number(selectedVehicleType),
         parking_lot: selectedLot.id,
-        slot: bestSlot.id,
+        slot: bestAvailableSlot.id,
         reservation_minutes: 15,
       });
       setBookingResult(response);
+      setSlots((currentSlots) => currentSlots.filter((slot) => slot.id !== bestAvailableSlot.id));
       setStatus({ type: "success", message: "Booking confirmed. Your reservation is active." });
       setStep(3);
     } catch (err) {
@@ -168,7 +194,7 @@ export default function HomePage() {
                 <button
                   key={vehicleType.id}
                   className={`vehicle-card ${selectedVehicleType === String(vehicleType.id) ? "selected" : ""}`}
-                  onClick={() => setSelectedVehicleType(String(vehicleType.id))}
+                  onClick={() => chooseVehicleType(vehicleType.id)}
                 >
                   <strong>{vehicleType.name}</strong>
                   <span>{vehicleType.description || "Flexible parking support"}</span>
@@ -268,8 +294,8 @@ export default function HomePage() {
               <>
                 <div className="slot-row">
                   {slots.length ? (
-                    slots.slice(0, 6).map((slot) => (
-                      <div key={slot.id} className={`slot-chip ${slot.is_occupied || slot.reserved ? "occupied" : ""}`}>
+                    slots.slice(0, 8).map((slot) => (
+                      <div key={slot.id} className={`slot-chip ${slot.id === bestAvailableSlot?.id ? "selected" : ""}`}>
                         Slot {slot.number} • {slot.zone}
                       </div>
                     ))
@@ -279,8 +305,8 @@ export default function HomePage() {
                 </div>
 
                 <div className="actions">
-                  <button className="primary-btn" onClick={confirmBooking} disabled={!selectedLot || loading}>
-                    Confirm booking
+                  <button className="primary-btn" onClick={confirmBooking} disabled={!selectedLot || !bestAvailableSlot || loading || Boolean(bookingResult)}>
+                    {bookingResult ? "Booking confirmed" : "Confirm booking"}
                   </button>
                 </div>
               </>

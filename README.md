@@ -99,6 +99,7 @@ Do not treat these as trick questions. These are realistic mistakes that happen 
 ### Django (`http://localhost:8000`)
 
 - `GET /api/lots/`
+- `GET /api/vehicle-types/`
 - `GET /api/lots/<id>/slots/available/`
 - `GET /api/bookings/`
 - `POST /api/bookings/`
@@ -113,8 +114,9 @@ Do not treat these as trick questions. These are realistic mistakes that happen 
 
 Fixture file: `backend-django/parking/fixtures/sample_data.json`
 
+- 16 active road-vehicle types, from bicycles/two-wheelers through cars, buses, trucks, tractors, and emergency vehicles
 - 3 parking lots (`Downtown Lot`, `Mall Parking`, `Airport Lot`)
-- 15 slots total (5 per lot), with mixed occupancy
+- 180 seeded slots from migrations (60 per lot), plus a compact fixture sample with mixed occupancy
 - 4 vehicles with realistic number plates
 - 3 bookings total
   - 2 active bookings (`end_time = null`)

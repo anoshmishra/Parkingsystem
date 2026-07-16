@@ -46,6 +46,7 @@ def list_vehicle_types(request):
 def list_lots(request):
     BookingService.expire_reservations()
     vehicle_type_filter = request.GET.get("vehicle_type", "").strip()
+    vehicle_type = None
     lots = ParkingLot.objects.filter(active=True).prefetch_related("vehicle_types", "facilities").order_by("name")
 
     if vehicle_type_filter:
@@ -55,7 +56,7 @@ def list_lots(request):
         else:
             lots = lots.none()
 
-    serializer = ParkingLotSerializer(lots, many=True)
+    serializer = ParkingLotSerializer(lots, many=True, context={"vehicle_type": vehicle_type})
     return Response(serializer.data)
 
 
@@ -79,7 +80,7 @@ def get_available_slots(request, lot_id):
         .annotate(has_active_booking=Exists(active_bookings))
         .select_related("parking_lot")
         .prefetch_related("vehicle_types")
-        .order_by("floor", "zone", "number")
+        .order_by("priority", "floor", "zone", "number")
     )
 
     if vehicle_type_filter:

@@ -44,6 +44,8 @@ class BookingService:
                 raise ValueError("Selected slot does not belong to the selected parking lot")
             if slot.disabled or slot.maintenance:
                 raise ValueError("Selected slot is unavailable")
+            if slot.is_occupied or slot.reserved:
+                raise ValueError("Slot is already reserved")
 
             existing_active_booking = Booking.objects.filter(
                 slot=slot,

@@ -11,11 +11,14 @@ import (
 )
 
 type ActiveBooking struct {
-	BookingID   int    `json:"booking_id"`
-	NumberPlate string `json:"number_plate"`
-	SlotNumber  int    `json:"slot_number"`
-	LotName     string `json:"lot_name"`
-	StartTime   string `json:"start_time"`
+	ID            int    `json:"id"`
+	BookingID     string `json:"booking_id"`
+	VehicleNumber string `json:"vehicle_number"`
+	VehicleType   string `json:"vehicle_type"`
+	SlotNumber    int    `json:"slot_number"`
+	LotName       string `json:"lot_name"`
+	StartTime     string `json:"start_time"`
+	Status        string `json:"status"`
 }
 
 type OccupancyRow struct {
@@ -54,12 +57,21 @@ func getDSN() string {
 
 func activeBookingsHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	rows, err := db.Query(`
-		SELECT b.id, v.number_plate, s.number, l.name, b.start_time::text
+		SELECT
+			b.id,
+			b.booking_id,
+			b.vehicle_number,
+			vt.name,
+			s.number,
+			l.name,
+			b.start_time::text,
+			b.status
 		FROM parking_booking b
-		JOIN parking_vehicle v ON b.vehicle_id = v.id
-		JOIN parking_slot s ON b.slot_id = s.id
-		JOIN parking_parkinglot l ON s.lot_id = l.id
+		JOIN parking_vehicletype vt ON b.vehicle_type_id = vt.id
+		JOIN parking_parkingslot s ON b.slot_id = s.id
+		JOIN parking_parkinglot l ON b.parking_lot_id = l.id
 		WHERE b.end_time IS NULL
+			AND b.status IN ('reserved', 'checked_in')
 		ORDER BY b.start_time DESC
 	`)
 	if err != nil {
@@ -71,7 +83,16 @@ func activeBookingsHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	result := []ActiveBooking{}
 	for rows.Next() {
 		var row ActiveBooking
-		if err := rows.Scan(&row.BookingID, &row.NumberPlate, &row.SlotNumber, &row.LotName, &row.StartTime); err != nil {
+		if err := rows.Scan(
+			&row.ID,
+			&row.BookingID,
+			&row.VehicleNumber,
+			&row.VehicleType,
+			&row.SlotNumber,
+			&row.LotName,
+			&row.StartTime,
+			&row.Status,
+		); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -83,10 +104,20 @@ func activeBookingsHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 func occupancyHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	rows, err := db.Query(`
-		SELECT l.id, l.name, COUNT(DISTINCT b.slot_id) AS occupied_count
+		SELECT
+			l.id,
+			l.name,
+			COUNT(DISTINCT s.id) FILTER (
+				WHERE s.is_occupied = TRUE
+					OR s.reserved = TRUE
+					OR b.id IS NOT NULL
+			) AS occupied_count
 		FROM parking_parkinglot l
-		LEFT JOIN parking_slot s ON l.id = s.lot_id
-		LEFT JOIN parking_booking b ON b.slot_id = s.id AND b.end_time IS NULL
+		LEFT JOIN parking_parkingslot s ON l.id = s.parking_lot_id
+		LEFT JOIN parking_booking b
+			ON b.slot_id = s.id
+			AND b.end_time IS NULL
+			AND b.status IN ('reserved', 'checked_in')
 		GROUP BY l.id, l.name
 		ORDER BY l.id
 	`)

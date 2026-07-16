@@ -19,7 +19,20 @@ class FacilitySerializer(serializers.ModelSerializer):
 class ParkingLotSerializer(serializers.ModelSerializer):
     vehicle_types = VehicleTypeSerializer(many=True, read_only=True)
     facilities = FacilitySerializer(many=True, read_only=True)
-    available_slot_count = serializers.IntegerField(read_only=True)
+    available_slot_count = serializers.SerializerMethodField()
+
+    def get_available_slot_count(self, obj):
+        slots = obj.slots.filter(is_occupied=False, reserved=False, maintenance=False, disabled=False)
+        vehicle_type = self.context.get("vehicle_type")
+        if vehicle_type:
+            slots = slots.filter(vehicle_types=vehicle_type)
+
+        active_booking_slot_ids = Booking.objects.filter(
+            slot__parking_lot=obj,
+            status__in=["reserved", "checked_in"],
+            end_time__isnull=True,
+        ).values("slot_id")
+        return slots.exclude(pk__in=active_booking_slot_ids).count()
 
     class Meta:
         model = ParkingLot
