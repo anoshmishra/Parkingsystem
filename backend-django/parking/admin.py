@@ -46,10 +46,10 @@ class VehicleAdmin(admin.ModelAdmin):
 
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ("booking_id", "vehicle_number", "parking_lot", "slot", "status", "payment_status", "reservation_expires_at")
+    list_display = ("booking_id", "owner_name", "owner_email", "vehicle_number", "parking_lot", "slot", "status", "payment_status", "reservation_expires_at")
     list_filter = ("status", "payment_status", "parking_lot")
     list_select_related = ("parking_lot", "slot", "vehicle_type")
-    search_fields = ("booking_id", "vehicle_number", "parking_lot__name")
+    search_fields = ("booking_id", "owner_name", "owner_email", "owner_phone", "vehicle_number", "parking_lot__name")
 
     def checkout_selected(self, request, queryset):
         now = timezone.now()

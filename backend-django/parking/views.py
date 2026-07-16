@@ -8,8 +8,10 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from .models import Booking, ParkingLot, ParkingSlot, VehicleType
+from .notifications import send_booking_confirmation
 from .serializers import (
     BookingCreateSerializer,
+    BookingListSerializer,
     BookingSerializer,
     ParkingLotSerializer,
     ParkingSlotSerializer,
@@ -127,7 +129,7 @@ def bookings(request):
             )
         if status_filter:
             bookings_qs = bookings_qs.filter(status=status_filter)
-        serializer = BookingSerializer(bookings_qs, many=True)
+        serializer = BookingListSerializer(bookings_qs, many=True)
         return Response(serializer.data)
 
     serializer = BookingCreateSerializer(data=request.data)
@@ -149,7 +151,13 @@ def bookings(request):
             {"success": False, "message": message, "detail": message, "errors": detail},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    return Response(BookingSerializer(booking).data, status=status.HTTP_201_CREATED)
+    receipt_sent = send_booking_confirmation(booking)
+    response_data = BookingSerializer(booking).data
+    response_data["receipt_delivery"] = {
+        "sent": receipt_sent,
+        "message": "Confirmation receipt emailed." if receipt_sent else "Booking confirmed, but the receipt email could not be sent yet.",
+    }
+    return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST", "PATCH"])

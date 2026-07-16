@@ -144,6 +144,9 @@ class Booking(models.Model):
 
     booking_id = models.CharField(max_length=20, unique=True, editable=False)
     vehicle_number = models.CharField(max_length=20)
+    owner_name = models.CharField(max_length=120, blank=True, default="")
+    owner_email = models.EmailField(blank=True, default="")
+    owner_phone = models.CharField(max_length=25, blank=True, default="")
     vehicle_type = models.ForeignKey(VehicleType, on_delete=models.PROTECT, related_name="bookings")
     parking_lot = models.ForeignKey(ParkingLot, on_delete=models.PROTECT, related_name="bookings")
     slot = models.ForeignKey(ParkingSlot, on_delete=models.PROTECT, related_name="bookings")

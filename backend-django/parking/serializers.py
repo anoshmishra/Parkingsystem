@@ -110,6 +110,36 @@ class BookingSerializer(serializers.ModelSerializer):
             "id",
             "booking_id",
             "vehicle_number",
+            "owner_name",
+            "owner_email",
+            "owner_phone",
+            "vehicle_type",
+            "parking_lot",
+            "slot",
+            "status",
+            "payment_status",
+            "start_time",
+            "end_time",
+            "duration_minutes",
+            "reservation_expires_at",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class BookingListSerializer(serializers.ModelSerializer):
+    """Public operations feed without owner contact details."""
+
+    vehicle_type = VehicleTypeSerializer(read_only=True)
+    parking_lot = ParkingLotSerializer(read_only=True)
+    slot = ParkingSlotSerializer(read_only=True)
+
+    class Meta:
+        model = Booking
+        fields = [
+            "id",
+            "booking_id",
+            "vehicle_number",
             "vehicle_type",
             "parking_lot",
             "slot",
@@ -126,6 +156,13 @@ class BookingSerializer(serializers.ModelSerializer):
 
 class BookingCreateSerializer(serializers.Serializer):
     vehicle_number = serializers.CharField(max_length=20)
+    owner_name = serializers.CharField(max_length=120, trim_whitespace=True)
+    owner_email = serializers.EmailField()
+    owner_phone = serializers.RegexField(
+        r"^\+?[0-9][0-9 ()-]{6,23}$",
+        max_length=25,
+        error_messages={"invalid": "Enter a valid phone number, including country code when applicable."},
+    )
     vehicle_type = serializers.PrimaryKeyRelatedField(queryset=VehicleType.objects.all())
     parking_lot = serializers.PrimaryKeyRelatedField(queryset=ParkingLot.objects.all())
     slot = serializers.PrimaryKeyRelatedField(queryset=ParkingSlot.objects.all())
@@ -135,6 +172,9 @@ class BookingCreateSerializer(serializers.Serializer):
         try:
             return BookingService.create_booking(
                 vehicle_number=validated_data["vehicle_number"],
+                owner_name=validated_data["owner_name"],
+                owner_email=validated_data["owner_email"],
+                owner_phone=validated_data["owner_phone"],
                 vehicle_type=validated_data["vehicle_type"],
                 parking_lot=validated_data["parking_lot"],
                 slot=validated_data["slot"],

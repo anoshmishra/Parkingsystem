@@ -21,7 +21,16 @@ class BookingService:
         return normalized
 
     @staticmethod
-    def create_booking(vehicle_number, vehicle_type, parking_lot, slot, reservation_minutes=15):
+    def create_booking(
+        vehicle_number,
+        owner_name,
+        owner_email,
+        owner_phone,
+        vehicle_type,
+        parking_lot,
+        slot,
+        reservation_minutes=15,
+    ):
         if not isinstance(vehicle_type, VehicleType):
             vehicle_type = VehicleType.objects.filter(pk=vehicle_type).first()
         if not isinstance(parking_lot, ParkingLot):
@@ -61,6 +70,9 @@ class BookingService:
 
             booking = Booking.objects.create(
                 vehicle_number=normalized_vehicle_number,
+                owner_name=owner_name.strip(),
+                owner_email=owner_email.strip().lower(),
+                owner_phone=owner_phone.strip(),
                 vehicle_type=vehicle_type,
                 parking_lot=parking_lot,
                 slot=slot,
