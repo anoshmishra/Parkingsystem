@@ -1,19 +1,22 @@
 """Receipt generation and email delivery for confirmed parking bookings."""
 
 import logging
+from base64 import b64encode
+from email.utils import parseaddr
 from io import BytesIO
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
 from django.utils import timezone
 from django.utils.html import escape
+from python_http_client.exceptions import HTTPError
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from sendgrid import SendGridAPIClient
 
 
 logger = logging.getLogger(__name__)
@@ -191,15 +194,48 @@ def build_booking_receipt(booking):
     return output.getvalue()
 
 
+def _receipt_delivery(sent, error=None):
+    return {"sent": sent, "error": error}
+
+
+def _sendgrid_sender(value):
+    name, email = parseaddr(value or "")
+    if not email:
+        return None
+    sender = {"email": email}
+    if name:
+        sender["name"] = name
+    return sender
+
+
+def _sendgrid_error_detail(error):
+    body = getattr(error, "body", "")
+    if isinstance(body, bytes):
+        body = body.decode("utf-8", errors="replace")
+    return str(body or error).strip()[:500]
+
+
 def send_booking_confirmation(booking):
-    """Email the PDF receipt to the owner and a private copy to the developer."""
+    """Deliver the booking receipt through the SendGrid Web API.
+
+    This function is called only after BookingService's atomic block has exited,
+    so a delivery failure can never roll back a confirmed parking reservation.
+    """
     owner_email = (booking.owner_email or "").strip().lower()
     if not owner_email:
         logger.warning("Receipt not sent for %s: owner email is missing", booking.booking_id)
-        return False
+        return _receipt_delivery(False, "Owner email is missing.")
+
+    if not settings.SENDGRID_API_KEY:
+        logger.error("Receipt not sent for %s: SENDGRID_API_KEY is not configured", booking.booking_id)
+        return _receipt_delivery(False, "SendGrid is not configured.")
+
+    sender = _sendgrid_sender(settings.DEFAULT_FROM_EMAIL)
+    if not sender:
+        logger.error("Receipt not sent for %s: DEFAULT_FROM_EMAIL is invalid", booking.booking_id)
+        return _receipt_delivery(False, "The sender email configuration is invalid.")
 
     developer_email = (settings.PARKING_DEVELOPER_EMAIL or "").strip().lower()
-    bcc = [developer_email] if developer_email and developer_email != owner_email else []
     subject = f"Parking confirmed - {booking.booking_id}"
     text_body = (
         f"Hi {booking.owner_name},\n\n"
@@ -222,26 +258,47 @@ def send_booking_confirmation(booking):
         "</table>"
         "<p>Please arrive before the reservation expires and keep this receipt available at the entrance.</p>"
     )
+    personalization = {
+        "to": [{"email": owner_email}],
+        "subject": subject,
+    }
+    if developer_email and developer_email != owner_email:
+        personalization["bcc"] = [{"email": developer_email}]
 
     try:
-        message = EmailMultiAlternatives(
-            subject=subject,
-            body=text_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[owner_email],
-            bcc=bcc,
-        )
-        message.attach_alternative(html_body, "text/html")
-        message.attach(
-            f"parking-receipt-{booking.booking_id}.pdf",
-            build_booking_receipt(booking),
-            "application/pdf",
-        )
-        delivered = message.send(fail_silently=False)
-        if delivered != 1:
-            logger.error("Receipt delivery returned %s for %s", delivered, booking.booking_id)
-            return False
-        return True
-    except Exception:
-        logger.exception("Unable to send confirmation receipt for %s", booking.booking_id)
-        return False
+        receipt = build_booking_receipt(booking)
+        message = {
+            "from": sender,
+            "personalizations": [personalization],
+            "content": [
+                {"type": "text/plain", "value": text_body},
+                {"type": "text/html", "value": html_body},
+            ],
+            "attachments": [
+                {
+                    "content": b64encode(receipt).decode("ascii"),
+                    "filename": f"parking-receipt-{booking.booking_id}.pdf",
+                    "type": "application/pdf",
+                    "disposition": "attachment",
+                }
+            ],
+        }
+        response = SendGridAPIClient(api_key=settings.SENDGRID_API_KEY).client.mail.send.post(request_body=message)
+        if not 200 <= response.status_code < 300:
+            logger.error(
+                "SendGrid rejected receipt delivery for %s with status %s",
+                booking.booking_id,
+                response.status_code,
+            )
+            return _receipt_delivery(False, f"SendGrid returned HTTP {response.status_code}.")
+        return _receipt_delivery(True)
+    except HTTPError as error:
+        detail = _sendgrid_error_detail(error)
+        logger.error("SendGrid rejected receipt delivery for %s: %s", booking.booking_id, detail)
+        return _receipt_delivery(False, f"SendGrid rejected the request: {detail}")
+    except SystemExit as error:
+        logger.error("SendGrid delivery unexpectedly stopped for %s: %s", booking.booking_id, error)
+        return _receipt_delivery(False, "SendGrid delivery stopped unexpectedly.")
+    except Exception as error:
+        logger.exception("Unable to deliver SendGrid receipt for %s", booking.booking_id)
+        return _receipt_delivery(False, f"SendGrid delivery failed: {error}")

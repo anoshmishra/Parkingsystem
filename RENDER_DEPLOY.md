@@ -20,9 +20,8 @@ gunicorn parking_project.wsgi:application
 - PARKING_DEVELOPER_EMAIL=anoshmishra09@gmail.com
 - PARKING_RECEIPT_TIME_ZONE=Asia/Kolkata
 
-The application now uses SendGrid's TLS SMTP relay at `smtp.sendgrid.net:587`.
-Create an API key with Mail Send permission and set it as `SENDGRID_API_KEY`;
-the SMTP username is automatically set to `apikey`. Before deploying, verify
+The application uses the SendGrid Web API, not SMTP. Create an API key with
+Mail Send permission and set it as `SENDGRID_API_KEY`. Before deploying, verify
 the address in `DEFAULT_FROM_EMAIL` as a Single Sender or authenticate its
 domain in SendGrid. Every new booking sends the owner a branded PDF receipt and
 sends the developer a private BCC copy.

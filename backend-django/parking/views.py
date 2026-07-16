@@ -151,11 +151,14 @@ def bookings(request):
             {"success": False, "message": message, "detail": message, "errors": detail},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    receipt_sent = send_booking_confirmation(booking)
+    receipt_delivery = send_booking_confirmation(booking)
     response_data = BookingSerializer(booking).data
+    response_data["success"] = True
+    response_data["receipt_sent"] = receipt_delivery["sent"]
+    response_data["receipt_error"] = receipt_delivery["error"]
     response_data["receipt_delivery"] = {
-        "sent": receipt_sent,
-        "message": "Confirmation receipt emailed." if receipt_sent else "Booking confirmed, but the receipt email could not be sent yet.",
+        "sent": receipt_delivery["sent"],
+        "message": "Confirmation receipt emailed." if receipt_delivery["sent"] else "Booking confirmed, but the receipt email could not be sent yet.",
     }
     return Response(response_data, status=status.HTTP_201_CREATED)
 

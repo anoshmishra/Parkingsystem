@@ -1,6 +1,6 @@
 from datetime import timedelta
+from base64 import b64decode
 
-from django.core import mail
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from unittest.mock import patch
@@ -99,7 +99,7 @@ class ParkingServiceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()[0]["available_slot_count"], 0)
 
-    @patch("parking.views.send_booking_confirmation", return_value=True)
+    @patch("parking.views.send_booking_confirmation", return_value={"sent": True, "error": None})
     def test_booking_endpoint_captures_owner_details_and_sends_receipt(self, send_receipt):
         response = self.client.post(
             "/api/bookings/",
@@ -118,6 +118,9 @@ class ParkingServiceTests(TestCase):
         self.assertEqual(response.status_code, 201, response.content)
         self.assertEqual(response.json()["owner_name"], "Aarav Kumar")
         self.assertEqual(response.json()["owner_email"], "aarav@example.com")
+        self.assertTrue(response.json()["success"])
+        self.assertTrue(response.json()["receipt_sent"])
+        self.assertIsNone(response.json()["receipt_error"])
         self.assertEqual(response.json()["receipt_delivery"]["sent"], True)
         send_receipt.assert_called_once()
 
@@ -141,11 +144,12 @@ class ParkingServiceTests(TestCase):
         self.assertTrue(receipt.startswith(b"%PDF"))
 
     @override_settings(
-        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        SENDGRID_API_KEY="SG.test-key",
         DEFAULT_FROM_EMAIL="Parking Reservations <parking@example.com>",
         PARKING_DEVELOPER_EMAIL="anoshmishra09@gmail.com",
     )
-    def test_confirmation_email_contains_pdf_and_developer_bcc(self):
+    @patch("parking.notifications.SendGridAPIClient")
+    def test_sendgrid_confirmation_contains_pdf_and_developer_bcc(self, client_class):
         booking = BookingService.create_booking(
             vehicle_number="OD02AB7777",
             owner_name="Aarav Kumar",
@@ -155,11 +159,57 @@ class ParkingServiceTests(TestCase):
             parking_lot=self.lot,
             slot=self.slot,
         )
+        client_class.return_value.client.mail.send.post.return_value.status_code = 202
 
-        self.assertTrue(send_booking_confirmation(booking))
-        self.assertEqual(len(mail.outbox), 1)
-        message = mail.outbox[0]
-        self.assertEqual(message.to, ["aarav@example.com"])
-        self.assertEqual(message.bcc, ["anoshmishra09@gmail.com"])
-        self.assertEqual(message.attachments[0].filename, f"parking-receipt-{booking.booking_id}.pdf")
-        self.assertTrue(message.attachments[0].content.startswith(b"%PDF"))
+        delivery = send_booking_confirmation(booking)
+
+        self.assertEqual(delivery, {"sent": True, "error": None})
+        request_body = client_class.return_value.client.mail.send.post.call_args.kwargs["request_body"]
+        self.assertEqual(request_body["personalizations"][0]["to"], [{"email": "aarav@example.com"}])
+        self.assertEqual(request_body["personalizations"][0]["bcc"], [{"email": "anoshmishra09@gmail.com"}])
+        self.assertEqual(request_body["attachments"][0]["filename"], f"parking-receipt-{booking.booking_id}.pdf")
+        self.assertTrue(b64decode(request_body["attachments"][0]["content"]).startswith(b"%PDF"))
+
+    @override_settings(SENDGRID_API_KEY="SG.test-key")
+    @patch("parking.notifications.SendGridAPIClient")
+    def test_sendgrid_error_does_not_escape_the_booking_request(self, client_class):
+        booking = BookingService.create_booking(
+            vehicle_number="OD02AB7777",
+            owner_name="Aarav Kumar",
+            owner_email="aarav@example.com",
+            owner_phone="+919876543210",
+            vehicle_type=self.car_type,
+            parking_lot=self.lot,
+            slot=self.slot,
+        )
+        client_class.return_value.client.mail.send.post.side_effect = SystemExit("simulated failure")
+
+        delivery = send_booking_confirmation(booking)
+
+        self.assertFalse(delivery["sent"])
+        self.assertEqual(delivery["error"], "SendGrid delivery stopped unexpectedly.")
+
+    @patch(
+        "parking.views.send_booking_confirmation",
+        return_value={"sent": False, "error": "SendGrid rejected the request: invalid sender."},
+    )
+    def test_booking_succeeds_when_sendgrid_receipt_fails(self, send_receipt):
+        response = self.client.post(
+            "/api/bookings/",
+            {
+                "vehicle_number": "OD02AB7777",
+                "owner_name": "Aarav Kumar",
+                "owner_email": "aarav@example.com",
+                "owner_phone": "+919876543210",
+                "vehicle_type": self.car_type.pk,
+                "parking_lot": self.lot.pk,
+                "slot": self.slot.pk,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertTrue(response.json()["success"])
+        self.assertFalse(response.json()["receipt_sent"])
+        self.assertEqual(response.json()["receipt_error"], "SendGrid rejected the request: invalid sender.")
+        send_receipt.assert_called_once()
