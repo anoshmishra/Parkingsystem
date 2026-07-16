@@ -108,6 +108,15 @@ h3 { font-size: 1rem; margin-bottom: 6px; }
   padding: 13px 14px;
   background: var(--panel-strong);
 }
+.contact-section {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(239, 246, 255, 0.7);
+}
+.contact-heading { font-weight: 800; color: var(--fg); margin-bottom: 4px; }
+.owner-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 
 .vehicle-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-top: 10px; }
 .lot-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 10px; }
@@ -185,6 +194,6 @@ h3 { font-size: 1rem; margin-bottom: 6px; }
 .booking-meta { color: var(--muted); font-size: 0.9rem; display: flex; flex-direction: column; gap: 4px; }
 
 @media (max-width: 860px) {
-  .vehicle-grid, .lot-grid, .summary-grid, .skeleton-grid { grid-template-columns: 1fr; }
+  .vehicle-grid, .lot-grid, .summary-grid, .skeleton-grid, .owner-fields { grid-template-columns: 1fr; }
   .hero-card, .booking-card, .panel-header, .lot-topline { flex-direction: column; align-items: flex-start; }
 }

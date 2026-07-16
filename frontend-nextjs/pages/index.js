@@ -13,6 +13,9 @@ export default function HomePage() {
   const [lots, setLots] = useState([]);
   const [selectedVehicleType, setSelectedVehicleType] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
+  const [ownerName, setOwnerName] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [ownerPhone, setOwnerPhone] = useState("");
   const [selectedLot, setSelectedLot] = useState(null);
   const [slots, setSlots] = useState([]);
   const [step, setStep] = useState(1);
@@ -74,6 +77,18 @@ export default function HomePage() {
       setError("Enter a vehicle number to continue.");
       return;
     }
+    if (!ownerName.trim()) {
+      setError("Enter the vehicle owner's name to continue.");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(ownerEmail.trim())) {
+      setError("Enter a valid owner email address to receive the receipt.");
+      return;
+    }
+    if (!/^\+?[0-9][0-9 ()-]{6,23}$/.test(ownerPhone.trim())) {
+      setError("Enter a valid owner phone number.");
+      return;
+    }
 
     try {
       setError("");
@@ -120,7 +135,7 @@ export default function HomePage() {
   }
 
   async function confirmBooking() {
-    if (!selectedLot || !selectedVehicleType || !vehicleNumber.trim()) {
+    if (!selectedLot || !selectedVehicleType || !vehicleNumber.trim() || !ownerName.trim() || !ownerEmail.trim() || !ownerPhone.trim()) {
       setError("Complete the booking details before confirming.");
       return;
     }
@@ -135,6 +150,9 @@ export default function HomePage() {
     try {
       const response = await createBooking({
         vehicle_number: vehicleNumber.trim().toUpperCase(),
+        owner_name: ownerName.trim(),
+        owner_email: ownerEmail.trim().toLowerCase(),
+        owner_phone: ownerPhone.trim(),
         vehicle_type: Number(selectedVehicleType),
         parking_lot: selectedLot.id,
         slot: bestAvailableSlot.id,
@@ -187,6 +205,54 @@ export default function HomePage() {
               placeholder="Example: OD02AB1234"
               maxLength={20}
             />
+
+            <div className="contact-section">
+              <div>
+                <p className="contact-heading">Vehicle owner details</p>
+                <p className="subtle">We’ll email a PDF parking receipt to the owner once the slot is confirmed.</p>
+              </div>
+              <div className="owner-fields">
+                <div>
+                  <label className="field-label" htmlFor="owner-name">Owner Name</label>
+                  <input
+                    id="owner-name"
+                    className="field"
+                    value={ownerName}
+                    onChange={(event) => setOwnerName(event.target.value)}
+                    placeholder="Example: Priya Sharma"
+                    autoComplete="name"
+                    maxLength={120}
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="owner-email">Owner Email</label>
+                  <input
+                    id="owner-email"
+                    className="field"
+                    type="email"
+                    value={ownerEmail}
+                    onChange={(event) => setOwnerEmail(event.target.value)}
+                    placeholder="priya@example.com"
+                    autoComplete="email"
+                    maxLength={254}
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="owner-phone">Phone Number</label>
+                  <input
+                    id="owner-phone"
+                    className="field"
+                    type="tel"
+                    value={ownerPhone}
+                    onChange={(event) => setOwnerPhone(event.target.value)}
+                    placeholder="+91 98765 43210"
+                    autoComplete="tel"
+                    inputMode="tel"
+                    maxLength={25}
+                  />
+                </div>
+              </div>
+            </div>
 
             <label className="field-label">Vehicle Type</label>
             <div className="vehicle-grid">
@@ -283,6 +349,8 @@ export default function HomePage() {
                   <h3>Vehicle</h3>
                   <p>{vehicleNumber}</p>
                   <p>{activeVehicleType?.name}</p>
+                  <p>Owner: {ownerName}</p>
+                  <p>{ownerEmail} • {ownerPhone}</p>
                   <p>Reservation window: 15 min</p>
                 </div>
               </div>
@@ -318,6 +386,7 @@ export default function HomePage() {
                 <h3>Booking ID {bookingResult.booking_id}</h3>
                 <p>Vehicle {bookingResult.vehicle_number} is parked securely at {selectedLot?.name}.</p>
                 <p>Slot {bookingResult.slot?.number} • Floor {bookingResult.slot?.floor || 1}</p>
+                <p>{bookingResult.receipt_delivery?.sent ? `A PDF receipt has been emailed to ${ownerEmail}.` : bookingResult.receipt_delivery?.message}</p>
               </div>
             ) : null}
           </div>
